@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-'''An implementation of sequence to sequence learning for performing phonetic transcription
+'''
+An implementation of sequence to sequence learning for performing phonetic transcription
 Padding is handled by using a repeated sentinel character (space)
 Input may optionally be inverted, shown to increase performance in many tasks in:
 "Learning to Execute"
@@ -11,6 +12,8 @@ Theoretically it introduces shorter term dependencies between source and target.
 '''
 
 from __future__ import print_function
+
+import keras
 from keras.utils.visualize_util import plot
 from keras.models import Sequential
 from keras.layers import Activation, TimeDistributed, Dense, RepeatVector, recurrent, Embedding, Reshape
@@ -96,6 +99,9 @@ def save(refs, preds, filename):
             guess = ptable.decode(pred, calc_argmax=False, ch=' ').strip()
             print(correct, '|', guess, file=res)
 
+#TELEGRAM BOT
+#bot = telegram.Bot(token='193640162:AAGV3d2H6IAenp3HsdLnuxECL7aLWLGpgmQ')
+
 
 # Parameters for the model and dataset
 TRAIN='wcmudict.train.dict'
@@ -105,9 +111,9 @@ TEST='wcmudict.test.dict'
 RNN = recurrent.LSTM
 VSIZE = 7
 HIDDEN_SIZE = 64
-BATCH_SIZE = 28
+BATCH_SIZE = 128
 LAYERS = 2
-INVERT = False
+INVERT = True
 
 train = Dictionary(TRAIN)
 test = Dictionary(TEST)
@@ -149,19 +155,23 @@ X_train = X_train[indices]
 y_train = y_train[indices]
 
 # Chopping matrices to save computational time
-X_train = X_train[:2 * BATCH_SIZE]
-y_train = y_train[:2 * BATCH_SIZE]
-X_val = X_val[:2 * BATCH_SIZE]
-y_val = y_val[:2 * BATCH_SIZE]
+X_train = X_train[:50 * BATCH_SIZE]
+y_train = y_train[:50 * BATCH_SIZE]
+X_val = X_val[:50 * BATCH_SIZE]
+y_val = y_val[:50 * BATCH_SIZE]
 
 print(X_train.shape)
 print(y_train.shape)
+
+from keras.layers.core import Dropout
 
 print('Build model...')
 model = Sequential()
 # "Encode" the input sequence using an RNN, producing an output of HIDDEN_SIZE
 model.add(Embedding(ctable.size, VSIZE, input_dtype='int32'))
 model.add(RNN(HIDDEN_SIZE))
+model.add(Dropout(0.2))
+
 # For the decoder's input, we repeat the encoded input for each time step
 model.add(RepeatVector(trans_maxlen))
 # The decoder RNN could be multiple layers stacked or a single layer
@@ -172,10 +182,12 @@ for _ in range(LAYERS):
 model.add(TimeDistributed(Dense(ptable.size)))
 model.add(Activation('softmax'))
 model.summary()
-plot(model, show_shapes=True, to_file='pho_rnn.png', show_layer_names=False)
+#plot(model, show_shapes=True, to_file='pho_rnn.png', show_layer_names=False)
 
+from keras.optimizers import Adam
+optimizer = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 model.compile(loss='sparse_categorical_crossentropy',
-              optimizer='adam',
+              optimizer=optimizer,
               metrics=['accuracy'])
 
 tr_loss = []
@@ -219,7 +231,6 @@ np.savetxt('tr_acc.txt', tr_acc)
 np.savetxt('val_acc.txt', val_acc)
 
 
-
 # Show plots
 x = np.arange(iteration)
 fig = plt.figure(1)
@@ -227,9 +238,6 @@ fig.suptitle('TRAINNING vs VALIDATION', fontsize=14, fontweight='bold')
 
 # LOSS: TRAINING vs VALIDATION
 sub_plot1 = fig.add_subplot(211)
-sub_plot1.text(1, .5, 'LOSS',
-        horizontalalignment='right', color = 'c',
-        transform=sub_plot1.transAxes)
 
 plt.plot(x, tr_loss, '--', linewidth=2, label='tr_loss')
 plt.plot(x, va_loss, label='va_loss')
@@ -238,9 +246,6 @@ plt.legend(loc='upper right')
 
 # ACCURACY: TRAINING vs VALIDATION
 sub_plot2 = fig.add_subplot(212)
-sub_plot2.text(1, .5,  'ACCURACY', color = 'c',
-        horizontalalignment='right',
-        transform=sub_plot2.transAxes)
 
 plt.plot(x, tr_acc, '--', linewidth=2, label='tr_acc')
 plt.plot(x, val_acc,label='val_acc')
